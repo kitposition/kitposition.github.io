@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <title>Babylon.js sample code</title>
+
+        <!-- Babylon.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+        <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+        <script src="https://cdn.babylonjs.com/recast.js"></script>
+        <script src="https://cdn.babylonjs.com/ammo.js"></script>
+        <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+        <script src="https://cdn.babylonjs.com/cannon.js"></script>
+        <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+        <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+        <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+        <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+        <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+        <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+        <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+        <style>
+            html, body {
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
+            
+            #canvasZone {
+                width: 100%;
+                height: 100%;
+            }
+        </style>
+    </head>
+<body>
+    <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var startRenderLoop = function (engine, canvas) {
+            engine.runRenderLoop(function () {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        }
+
+        var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        /***************************************************
+ * WebXR Image Tracking Demo
+ * ************************************************
+ * 
+ * Working (at the moment) on android devices and the latest chrome and Google VR Services installed and under the WebXR flag
+ *
+ * Demo set-up: Before doing the demo you need to add you own image to track:
+ *          - Take a physical image (like a book cover from instance) that you'll use and scan it
+ *          - make it available via an URL
+ *          - replace URL in line 150 and estimated real world width (in meters) in line 151
+ *          - save this playground and load the new URL in a compatible device
+ *   
+ * Running the demo:
+ * - You'll see the 3D model appear on top of the image and moving along with it
+ * - "Fly" Button will start the rotors animation 
+ * 
+ * Demo created by @thomlucc, based on examples from Raanan Weber (@RaananW)
+ * 
+ * 
+ * Ingenuity Model: Credit NASA/JPL-Caltech (https://mars.nasa.gov/resources/25043/mars-ingenuity-helicopter-3d-model/)  
+ */
+var createScene = async function () {
+    // This creates a basic Babylon Scene object (non-mesh)
+    var scene = new BABYLON.Scene(engine);
+
+    // This creates and positions a free camera (non-mesh)
+    var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
+
+    // This targets the camera to scene origin
+    camera.setTarget(BABYLON.Vector3.Zero());
+
+    // This attaches the camera to the canvas
+    camera.attachControl(canvas, true);
+
+    // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+    var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    light.intensity = 1.5;
+    var dirLight = new BABYLON.DirectionalLight("dirlight", new BABYLON.Vector3(0, -1, -0.5), scene);
+    dirLight.position = new BABYLON.Vector3(0, 5, -5);
+
+    // Check AR availability 
+    let arAvailable = await BABYLON.WebXRSessionManager.IsSessionSupportedAsync('immersive-ar');
+
+    //Create full screen texture for GUI 
+    const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+        "FullscreenUI"
+    );
+
+    //Add GUI for non-AR mode
+    var rectangle = new BABYLON.GUI.Rectangle("rect");
+    rectangle.background = "black";
+    rectangle.color = "blue";
+    rectangle.width = "80%";
+    rectangle.height = "50%";
+
+    advancedTexture.addControl(rectangle);
+    var nonXRPanel = new BABYLON.GUI.StackPanel();
+    rectangle.addControl(nonXRPanel);
+
+    if (!arAvailable) {
+        const text1 = new BABYLON.GUI.TextBlock("text1");
+        text1.fontFamily = "Helvetica";
+        text1.textWrapping = true;
+        text1.text = "AR is not available in your system. Please make sure you use a supported mobile device such as a modern Android device and a supported browser like Chrome.";
+        text1.color = "white";
+        text1.fontSize = "20px";
+        text1.height = "100px"
+
+        text1.paddingLeft = "10px";
+        text1.paddingRight = "10px";
+        nonXRPanel.addControl(text1);
+
+        const text2 = new BABYLON.GUI.TextBlock("text1");
+        text2.fontFamily = "Helvetica";
+        text2.textWrapping = true;
+        text2.text = "Make sure you have Google AR services installed and that you enabled the WebXR incubation flag under chrome://flags";
+        text2.color = "white";
+        text2.fontSize = "20px";
+        text2.height = "100px";
+        text2.paddingLeft = "10px";
+        text2.paddingRight = "10px";
+        nonXRPanel.addControl(text2);
+        return scene;
+    } else {
+        const text1 = new BABYLON.GUI.TextBlock("text1");
+        text1.fontFamily = "Helvetica";
+        text1.textWrapping = true;
+        text1.text = "WebXR Image Tracking Demo - Change the code on a desktop first to replace with your own image to track (see comments in the code).";
+        text1.color = "white";
+        text1.fontSize = "14px";
+        text1.height = "400px"
+
+        text1.paddingLeft = "10px";
+        text1.paddingRight = "10px";
+        nonXRPanel.addControl(text1);
+    }
+
+    //Add the GUI for AR Mode
+    var panel = new BABYLON.GUI.StackPanel();
+    panel.isVisible = false;
+    panel.alpha = 0.75;
+    panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+    panel.paddingBottomInPixels = 40;
+    advancedTexture.addControl(panel);
+
+    const buttonSet = BABYLON.GUI.Button.CreateSimpleButton("buttonSet", "Fly");
+    buttonSet.width = 0.25;
+    buttonSet.height = "120px";
+    buttonSet.color = "white";
+    buttonSet.background = "green";
+    buttonSet.textBlock.fontSize = "26px";
+    let running = false;
+    //Run fly animation when button is pressed
+    buttonSet.onPointerClickObservable.add(() => {
+        panel.isVisible = false;
+        runAnimation();
+    })
+    panel.addControl(buttonSet);
+
+
+    // Create the WebXR Experience Helper for an AR Session (it initializes the XR scene, creates an XR Camera, 
+    // initialize the features manager, create an HTML UI button to enter XR,...)
+    var xr = await scene.createDefaultXRExperienceAsync({
+        uiOptions: {
+            sessionMode: "immersive-ar",
+            referenceSpaceType: "local-floor",
+            onError: (error) => {
+                alert(error);
+            }
+        },
+        optionalFeatures: true
+    });
+
+    //Hide/Show GUI depending of AR/nonAR mode
+    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
+        rectangle.isVisible = false;
+        panel.isVisible = true;
+    })
+    xr.baseExperience.sessionManager.onXRSessionEnded.add(() => {
+        rectangle.isVisible = true;
+        panel.isVisible = false;
+    })
+
+    // Get the Feature Manager and from it the image tracking feature
+    const fm = xr.baseExperience.featuresManager;
+    const imageTracking = fm.enableFeature(BABYLON.WebXRFeatureName.IMAGE_TRACKING, 'latest', {
+        images: [
+            {
+                //URL to the image that is being tracked (you need to change it with your image, and update its real world width in meters)
+                src: 'https://kitposition.github.io/Assets/Meishi01.png',
+                estimatedRealWorldWidth: 0.15
+            }
+        ]
+    });
+
+    // Load the 3D model to be added in AR
+    const model = await BABYLON.SceneLoader.ImportMeshAsync("", "https://thomlucc.github.io/Assets/MarsDemo/", "Ingenuity_v3.glb", scene);
+    const modelMesh = model.meshes[0];
+    modelMesh.rotationQuaternion = new BABYLON.Quaternion();
+    modelMesh.setEnabled(false);
+
+
+    //Track image and display the model with animations on it
+    imageTracking.onUntrackableImageFoundObservable.add((idx) => {
+        console.log('untrackable', idx);
+    })
+
+
+    imageTracking.onTrackableImageFoundObservable.add((image) => {
+        modelMesh.setEnabled(true);
+    })
+
+
+    imageTracking.onTrackedImageUpdatedObservable.add((image) => {
+
+        if (!running) {
+            image.transformationMatrix.decompose(modelMesh.scaling, modelMesh.rotationQuaternion, modelMesh.position);
+            modelMesh.scaling.set(image.realWorldWidth / image.ratio, image.realWorldWidth / image.ratio, image.realWorldWidth / image.ratio);
+        };
+
+    })
+
+    // Animation function that runs when the "Fly button is pressed"
+    const runAnimation = () => {
+        if (running) {
+            return;
+        };
+        running = true;
+
+        //Number of animation frames per second
+        const frameRate = 10;
+
+        //Set-up animations of the two rotors 
+
+        //-Get the rotor transformation nodes to apply rotation animation
+        const rotor1Node = scene.getTransformNodeByName("rotors_01");
+        rotor1Node.rotationQuaternion = null
+        const rotor2Node = scene.getTransformNodeByName("rotors_02");
+        rotor2Node.rotationQuaternion = null
+
+        //-Animate rotor transformation nodes
+        const rotorSpeed = 2000;
+
+        const rotor1Anim = new BABYLON.Animation("rotorAnim", "rotation.x", frameRate, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+        const rotor2Anim = new BABYLON.Animation("rotorAnim", "rotation.x", frameRate, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+
+        const keyFramesR1 = [];
+        keyFramesR1.push({
+            frame: 0,
+            value: 0
+        });
+        keyFramesR1.push({
+            frame: frameRate,
+            value: rotorSpeed * Math.PI
+        });
+
+        const keyFramesR2 = [];
+        keyFramesR2.push({
+            frame: 0,
+            value: 0
+        });
+        keyFramesR2.push({
+            frame: frameRate,
+            value: -rotorSpeed * Math.PI
+        });
+
+        rotor1Anim.setKeys(keyFramesR1);
+        rotor1Node.animations.push(rotor1Anim);
+
+        rotor2Anim.setKeys(keyFramesR2);
+        rotor2Node.animations.push(rotor2Anim);
+
+        //Start animations
+        scene.beginAnimation(rotor1Node, 0, frameRate, true);
+        scene.beginAnimation(rotor2Node, 0, frameRate, true);
+
+    };
+
+    return scene;
+};
+                window.initFunction = async function() {
+                    
+                    
+                    
+                    var asyncEngineCreation = async function() {
+                        try {
+                        return createDefaultEngine();
+                        } catch(e) {
+                        console.log("the available createEngine function failed. Creating the default engine instead");
+                        return createDefaultEngine();
+                        }
+                    }
+
+                    window.engine = await asyncEngineCreation();
+        if (!engine) throw 'engine should not be null.';
+        startRenderLoop(engine, canvas);
+        window.scene = createScene();};
+        initFunction().then(() => {scene.then(returnedScene => { sceneToRender = returnedScene; });
+                            
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>
